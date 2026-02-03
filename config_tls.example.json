@@ -1,0 +1,10 @@
+{
+  "server_address": ":9443",
+  "database_dsn": "",
+  "jwt_secret": "secret-key",
+  "storage_type": "memory",
+  "enable_tls": true,
+  "tls_cert_file": "certs/server.crt",
+  "tls_key_file": "certs/server.key",
+  "encryption_key": "your-32-byte-encryption-key"
+}

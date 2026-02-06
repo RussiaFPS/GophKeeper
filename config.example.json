@@ -1,0 +1,7 @@
+{
+  "server_address": ":8080",
+  "database_dsn": "postgresql://postgres:qwer1234@localhost:5432/project",
+  "jwt_secret": "your-secret-key",
+  "storage_type": "postgres",
+  "encryption_key": "your-32-byte-encryption-key"
+}

@@ -28,13 +28,13 @@ func (a *API) Register(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	hashedPassword, err := auth.HashPassword(user.Password)
 	if err != nil {
-		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
 	user.Password = hashedPassword
@@ -43,15 +43,14 @@ func (a *API) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var userExistsErr storage.ErrUserExists
 		if errors.As(err, &userExistsErr) {
-			http.Error(w, err.Error(), http.StatusConflict)
+			RespondWithError(w, http.StatusConflict, err.Error())
 			return
 		}
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createdUser)
+	RespondWithJSON(w, http.StatusCreated, createdUser)
 }
 
 func (a *API) Login(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +58,7 @@ func (a *API) Login(w http.ResponseWriter, r *http.Request) {
 
 	var creds models.User
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -67,26 +66,25 @@ func (a *API) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var userNotFoundErr storage.ErrUserNotFound
 		if errors.As(err, &userNotFoundErr) {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			RespondWithError(w, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
-		http.Error(w, "Server error", http.StatusInternalServerError) // Generic error for other storage issues
+		RespondWithError(w, http.StatusInternalServerError, "Server error")
 		return
 	}
 
 	if !auth.CheckPasswordHash(creds.Password, user.Password) {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		RespondWithError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
 	token, err := a.jwtManager.GenerateJWT(user.ID)
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+	RespondWithJSON(w, http.StatusOK, map[string]string{"token": token})
 }
 
 func (a *API) CreateSecret(w http.ResponseWriter, r *http.Request) {
@@ -94,25 +92,24 @@ func (a *API) CreateSecret(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "User ID not found in context", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "User ID not found in context")
 		return
 	}
 
 	var secret models.Secret
 	if err := json.NewDecoder(r.Body).Decode(&secret); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 	secret.UserID = userID // Ensure secret is for the authenticated user
 
 	createdSecret, err := a.store.CreateSecret(ctx, secret)
 	if err != nil {
-		http.Error(w, "Failed to create secret", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to create secret")
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createdSecret)
+	RespondWithJSON(w, http.StatusCreated, createdSecret)
 }
 
 func (a *API) GetSecrets(w http.ResponseWriter, r *http.Request) {
@@ -120,18 +117,17 @@ func (a *API) GetSecrets(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "User ID not found in context", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "User ID not found in context")
 		return
 	}
 
 	secrets, err := a.store.GetSecrets(ctx, userID)
 	if err != nil {
-		http.Error(w, "Failed to retrieve secrets", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to retrieve secrets")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(secrets)
+	RespondWithJSON(w, http.StatusOK, secrets)
 }
 
 func (a *API) GetSecretByID(w http.ResponseWriter, r *http.Request) {
@@ -139,19 +135,19 @@ func (a *API) GetSecretByID(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "User ID not found in context", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "User ID not found in context")
 		return
 	}
 
 	secretIDStr := chi.URLParam(r, "id")
 	if secretIDStr == "" {
-		http.Error(w, "Missing secret ID", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Missing secret ID")
 		return
 	}
 
 	secretID, err := strconv.Atoi(secretIDStr)
 	if err != nil {
-		http.Error(w, "Invalid secret ID", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Invalid secret ID")
 		return
 	}
 
@@ -159,15 +155,14 @@ func (a *API) GetSecretByID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var secretNotFoundErr storage.ErrSecretNotFound
 		if errors.As(err, &secretNotFoundErr) {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			RespondWithError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		http.Error(w, "Failed to retrieve secret", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to retrieve secret")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(secret)
+	RespondWithJSON(w, http.StatusOK, secret)
 }
 
 func (a *API) UpdateSecret(w http.ResponseWriter, r *http.Request) {
@@ -175,25 +170,25 @@ func (a *API) UpdateSecret(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "User ID not found in context", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "User ID not found in context")
 		return
 	}
 
 	secretIDStr := chi.URLParam(r, "id")
 	if secretIDStr == "" {
-		http.Error(w, "Missing secret ID", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Missing secret ID")
 		return
 	}
 
 	secretID, err := strconv.Atoi(secretIDStr)
 	if err != nil {
-		http.Error(w, "Invalid secret ID", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Invalid secret ID")
 		return
 	}
 
 	var secret models.Secret
 	if err := json.NewDecoder(r.Body).Decode(&secret); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -204,15 +199,14 @@ func (a *API) UpdateSecret(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var secretNotFoundErr storage.ErrSecretNotFound
 		if errors.As(err, &secretNotFoundErr) {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			RespondWithError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		http.Error(w, "Failed to update secret", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to update secret")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updatedSecret)
+	RespondWithJSON(w, http.StatusOK, updatedSecret)
 }
 
 func (a *API) DeleteSecret(w http.ResponseWriter, r *http.Request) {
@@ -220,19 +214,19 @@ func (a *API) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "User ID not found in context", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "User ID not found in context")
 		return
 	}
 
 	secretIDStr := chi.URLParam(r, "id")
 	if secretIDStr == "" {
-		http.Error(w, "Missing secret ID", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Missing secret ID")
 		return
 	}
 
 	secretID, err := strconv.Atoi(secretIDStr)
 	if err != nil {
-		http.Error(w, "Invalid secret ID", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "Invalid secret ID")
 		return
 	}
 
@@ -240,10 +234,10 @@ func (a *API) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var secretNotFoundErr storage.ErrSecretNotFound
 		if errors.As(err, &secretNotFoundErr) {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			RespondWithError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		http.Error(w, "Failed to delete secret", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to delete secret")
 		return
 	}
 
